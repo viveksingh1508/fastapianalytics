@@ -2,26 +2,31 @@ from fastapi import APIRouter
 from .models import EventModel, EventListSchema, EventCreateSchema, EventUpdateSchema
 from api.db.session import get_session
 from fastapi import APIRouter, Depends
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 
 router = APIRouter()
 
 
-@router.get("/")
-def read_events() -> EventListSchema:
-    return {"results": [{"id": 1}, {"id": 2}, {"id": 3}], "count": 3}
+@router.get("/", response_model=EventListSchema)
+def read_events(session: Session = Depends(get_session)) -> EventListSchema:
+    query = select(EventModel)
+    results = session.exec(query).all()
+    return {"results": results, "count": len(results)}
 
 
-@router.get("/{event_id}")
-def get_event(event_id: int) -> EventModel:
-    return {"id": event_id}
+@router.get("/{event_id}", response_model=EventModel)
+def get_event(event_id: int, session: Session = Depends(get_session)):
+    query = select(EventModel).where(EventModel.id == event_id)
+    result = session.exec(query).first()
+    if not result:
+        return {"error": "Event not found"}
+    return result
 
 
 @router.post("/", response_model=EventModel)
 def create_event(payload: EventCreateSchema, session: Session = Depends(get_session)):
     data = payload.model_dump()
-    print("dataaaaa", data)
     obj = EventModel.model_validate(data)
     session.add(obj)
     session.commit()
@@ -29,7 +34,16 @@ def create_event(payload: EventCreateSchema, session: Session = Depends(get_sess
     return obj
 
 
-@router.put("/{event_id}")
-def update_event(event_id: int, payload: EventUpdateSchema) -> EventModel:
-    data = payload.model_dump()
-    return {"id": event_id, **data}
+@router.put("/{event_id}", response_model=EventModel)
+def update_event(
+    event_id: int, payload: EventUpdateSchema, session: Session = Depends(get_session)
+):
+    query = select(EventModel).where(EventModel.id == event_id)
+    result = session.exec(query).first()
+    if not result:
+        return {"error": "Event not found"}
+    result.description = payload.description
+    session.add(result)
+    session.commit()
+    session.refresh(result)
+    return result
