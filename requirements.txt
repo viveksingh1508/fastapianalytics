@@ -7,3 +7,4 @@ timescaledb==0.0.4
 uvicorn==0.34.2
 requests
 python-decouple
+psycopg[binary]
